@@ -1,70 +1,65 @@
 package com.example.cst2335lab2;
 
+import android.content.Intent;
+import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.widget.Button;
-import android.widget.CheckBox;
-import android.widget.CompoundButton;
 import android.widget.EditText;
-import android.widget.TextView;
-import android.widget.Toast;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
-
-import com.google.android.material.snackbar.Snackbar;
 
 public class MainActivity extends AppCompatActivity {
 
-    TextView textView;
-    EditText editText;
-    Button pressButton;
-    CheckBox checkBox;
+    private EditText nameEditText;
+    private SharedPreferences preferences;
+
+    private final ActivityResultLauncher<Intent> nameActivityLauncher =
+            registerForActivityResult(
+                    new ActivityResultContracts.StartActivityForResult(),
+                    result -> {
+                        if (result.getResultCode() == 0) {
+                            nameEditText.requestFocus();
+                        } else if (result.getResultCode() == 1) {
+                            finish();
+                        }
+                    });
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
 
-        setContentView(R.layout.activity_main_linear);
+        nameEditText = findViewById(R.id.nameEditText);
+        Button nextButton = findViewById(R.id.nextButton);
 
-        textView = findViewById(R.id.textView);
-        editText = findViewById(R.id.editText);
-        pressButton = findViewById(R.id.pressButton);
-        checkBox = findViewById(R.id.checkBox);
+        preferences = getSharedPreferences("MyPreferences", MODE_PRIVATE);
 
-        pressButton.setOnClickListener(view -> {
+        String savedName = preferences.getString("name", "");
 
-            textView.setText(editText.getText().toString());
+        if (!savedName.isEmpty()) {
+            nameEditText.setText(savedName);
+        }
 
-            Toast.makeText(
-                    this,
-                    getResources().getString(R.string.toast_message),
-                    Toast.LENGTH_SHORT
-            ).show();
+        nextButton.setOnClickListener(v -> {
+            String name = nameEditText.getText().toString();
+
+            Intent intent = new Intent(MainActivity.this, NameActivity.class);
+            intent.putExtra("name", name);
+
+            nameActivityLauncher.launch(intent);
         });
+    }
 
-        checkBox.setOnCheckedChangeListener(
-                (CompoundButton cb, boolean b) -> {
+    @Override
+    protected void onPause() {
+        super.onPause();
 
-                    String state;
+        String name = nameEditText.getText().toString();
 
-                    if (b) {
-                        state = getResources().getString(R.string.on);
-                    } else {
-                        state = getResources().getString(R.string.off);
-                    }
-
-                    String message =
-                            getResources().getString(R.string.checkbox_message)
-                                    + " " + state;
-
-                    Snackbar.make(
-                            cb,
-                            message,
-                            Snackbar.LENGTH_LONG
-                    ).setAction(
-                            getResources().getString(R.string.undo),
-                            click -> cb.setChecked(!b)
-                    ).show();
-                }
-        );
+        preferences.edit()
+                .putString("name", name)
+                .apply();
     }
 }

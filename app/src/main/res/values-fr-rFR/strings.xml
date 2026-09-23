@@ -1,14 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">CST2335 Lab 2</string>
-    <string name="love_android">J’aime Android</string>
-    <string name="switch_text">Activer ou désactiver</string>
-    <string name="press_me">Appuyez-moi</string>
-    <string name="check_this">Vérifiez ceci !</string>
-    <string name="edit_hint">J’aime Android</string>
-    <string name="toast_message">L’étiquette a été mise à jour.</string>
-    <string name="checkbox_message">La case est maintenant</string>
-    <string name="on">activée</string>
-    <string name="off">désactivée</string>
-    <string name="undo">Annuler</string>
+    <string name="app_name">CST2335 Lab 3</string>
+    <string name="enter_name">Entrez votre nom</string>
+    <string name="name_hint">Nom</string>
+    <string name="next">Suivant</string>
+    <string name="welcome">Bienvenue</string>
+    <string name="thank_you">Merci</string>
+    <string name="dont_call_me_that">Ne m appelez pas comme ca</string>
+    <string name="welcome_name">Bienvenue %1$s</string>
 </resources>
