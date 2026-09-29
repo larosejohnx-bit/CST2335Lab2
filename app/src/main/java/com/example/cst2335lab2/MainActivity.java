@@ -1,65 +1,99 @@
 package com.example.cst2335lab2;
 
-import android.content.Intent;
-import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.ListView;
+import android.widget.Switch;
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
 
-import androidx.activity.result.ActivityResultLauncher;
-import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+
+import java.util.ArrayList;
+import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
 
-    private EditText nameEditText;
-    private SharedPreferences preferences;
+    private EditText todoEditText;
+    private Switch urgentSwitch;
+    private Button addButton;
+    private ListView todoListView;
 
-    private final ActivityResultLauncher<Intent> nameActivityLauncher =
-            registerForActivityResult(
-                    new ActivityResultContracts.StartActivityForResult(),
-                    result -> {
-                        if (result.getResultCode() == 0) {
-                            nameEditText.requestFocus();
-                        } else if (result.getResultCode() == 1) {
-                            finish();
-                        }
-                    });
+    private List<TodoItem> todoList;
+    private TodoAdapter adapter;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
         setContentView(R.layout.activity_main);
 
-        nameEditText = findViewById(R.id.nameEditText);
-        Button nextButton = findViewById(R.id.nextButton);
-
-        preferences = getSharedPreferences("MyPreferences", MODE_PRIVATE);
-
-        String savedName = preferences.getString("name", "");
-
-        if (!savedName.isEmpty()) {
-            nameEditText.setText(savedName);
-        }
-
-        nextButton.setOnClickListener(v -> {
-            String name = nameEditText.getText().toString();
-
-            Intent intent = new Intent(MainActivity.this, NameActivity.class);
-            intent.putExtra("name", name);
-
-            nameActivityLauncher.launch(intent);
+        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main), (v, insets) -> {
+            Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
+            v.setPadding(
+                    v.getPaddingLeft(),
+                    systemBars.top,
+                    v.getPaddingRight(),
+                    v.getPaddingBottom()
+            );
+            return insets;
         });
-    }
+        todoEditText = findViewById(R.id.todoEditText);
+        urgentSwitch = findViewById(R.id.urgentSwitch);
+        addButton = findViewById(R.id.addButton);
+        todoListView = findViewById(R.id.todoListView);
 
-    @Override
-    protected void onPause() {
-        super.onPause();
+        todoList = new ArrayList<>();
 
-        String name = nameEditText.getText().toString();
+        adapter = new TodoAdapter(this, todoList);
 
-        preferences.edit()
-                .putString("name", name)
-                .apply();
+        todoListView.setAdapter(adapter);
+
+        addButton.setOnClickListener(view -> {
+
+            String text = todoEditText.getText().toString();
+
+            if (!text.isEmpty()) {
+
+                boolean urgent = urgentSwitch.isChecked();
+
+                TodoItem item = new TodoItem(text, urgent);
+
+                todoList.add(item);
+
+                todoEditText.setText("");
+
+                urgentSwitch.setChecked(false);
+
+                adapter.notifyDataSetChanged();
+            }
+        });
+
+        todoListView.setOnItemLongClickListener((parent, view, position, id) -> {
+
+            AlertDialog.Builder builder = new AlertDialog.Builder(this);
+
+            builder.setTitle(R.string.delete_title);
+
+            builder.setMessage(
+                    getString(R.string.selected_row, position)
+            );
+
+            builder.setPositiveButton(R.string.yes, (dialog, which) -> {
+
+                todoList.remove(position);
+
+                adapter.notifyDataSetChanged();
+            });
+
+            builder.setNegativeButton(R.string.no, null);
+
+            builder.show();
+
+            return true;
+        });
     }
 }
