@@ -1,304 +1,190 @@
 package com.example.cst2335lab2;
 
-import android.content.ContentValues;
-import android.database.Cursor;
-import android.database.sqlite.SQLiteDatabase;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.os.AsyncTask;
 import android.os.Bundle;
 import android.util.Log;
-import android.widget.Button;
-import android.widget.EditText;
-import android.widget.ListView;
-import android.widget.Switch;
+import android.widget.ImageView;
+import android.widget.ProgressBar;
 
-import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.graphics.Insets;
-import androidx.core.view.ViewCompat;
-import androidx.core.view.WindowInsetsCompat;
 
-import java.util.ArrayList;
-import java.util.List;
+import org.json.JSONObject;
+
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 
 public class MainActivity extends AppCompatActivity {
 
-    private TodoDatabaseHelper dbHelper;
-    private SQLiteDatabase db;
-
-    private EditText todoEditText;
-    private Switch urgentSwitch;
-    private Button addButton;
-    private ListView todoListView;
-
-    private List<TodoItem> todoList;
-    private TodoAdapter adapter;
+    private ImageView catImageView;
+    private ProgressBar progressBar;
+    private CatImages catTask;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
         setContentView(R.layout.activity_main);
 
-        // Open database
-        dbHelper = new TodoDatabaseHelper(this);
-        db = dbHelper.getWritableDatabase();
+        catImageView = findViewById(R.id.catImageView);
+        progressBar = findViewById(R.id.progressBar);
 
-        // Keeps content below the status bar
-        ViewCompat.setOnApplyWindowInsetsListener(
-                findViewById(R.id.main),
-                (v, insets) -> {
+        progressBar.setMax(100);
+        progressBar.setProgress(0);
 
-                    Insets systemBars =
-                            insets.getInsets(
-                                    WindowInsetsCompat.Type.systemBars());
+        catTask = new CatImages();
+        catTask.execute();
+    }
 
-                    v.setPadding(
-                            v.getPaddingLeft(),
-                            systemBars.top,
-                            v.getPaddingRight(),
-                            v.getPaddingBottom()
+    @Override
+    protected void onDestroy() {
+        if (catTask != null) {
+            catTask.cancel(true);
+        }
+        super.onDestroy();
+    }
+
+    // Downloads cat pictures and updates the slideshow
+    private class CatImages extends AsyncTask<String, Integer, String> {
+
+        private Bitmap currentCat;
+
+        @Override
+        protected String doInBackground(String... strings) {
+
+            while (!isCancelled()) {
+                HttpURLConnection connection = null;
+
+                try {
+                    // Request random cat information
+                    URL apiUrl = new URL(
+                            "https://cataas.com/cat?json=true"
                     );
 
-                    return insets;
-                });
+                    connection = (HttpURLConnection)
+                            apiUrl.openConnection();
 
-        // Connect views
-        todoEditText = findViewById(R.id.todoEditText);
-        urgentSwitch = findViewById(R.id.urgentSwitch);
-        addButton = findViewById(R.id.addButton);
-        todoListView = findViewById(R.id.todoListView);
+                    connection.setConnectTimeout(10000);
+                    connection.setReadTimeout(10000);
+                    connection.setUseCaches(false);
 
-        // Create list and adapter
-        todoList = new ArrayList<>();
+                    StringBuilder response = new StringBuilder();
 
-        adapter = new TodoAdapter(this, todoList);
+                    try (InputStream input = connection.getInputStream();
+                         java.util.Scanner scanner =
+                                 new java.util.Scanner(input, "UTF-8")) {
 
-        todoListView.setAdapter(adapter);
+                        scanner.useDelimiter("\\A");
 
-        // Load saved todos from database
-        loadTodos();
+                        if (scanner.hasNext()) {
+                            response.append(scanner.next());
+                        }
+                    }
 
-        // ADD BUTTON
-        addButton.setOnClickListener(view -> {
-
-            String text = todoEditText
-                    .getText()
-                    .toString()
-                    .trim();
-
-            if (!text.isEmpty()) {
-
-                boolean urgent = urgentSwitch.isChecked();
-
-                // Values to save in SQLite
-                ContentValues values = new ContentValues();
-
-                values.put(
-                        TodoDatabaseHelper.COL_TODO,
-                        text
-                );
-
-                values.put(
-                        TodoDatabaseHelper.COL_URGENT,
-                        urgent ? 1 : 0
-                );
-
-                // Insert into database
-                long newId = db.insert(
-                        TodoDatabaseHelper.TABLE_NAME,
-                        null,
-                        values
-                );
-
-                if (newId != -1) {
-
-                    // Add to ListView
-                    TodoItem item =
-                            new TodoItem(newId, text, urgent);
-
-                    todoList.add(item);
-
-                    adapter.notifyDataSetChanged();
-
-                    // Clear input
-                    todoEditText.setText("");
-                    urgentSwitch.setChecked(false);
-
-                    Log.d(
-                            "Database",
-                            "Todo added with ID: " + newId
+                    JSONObject json = new JSONObject(
+                            response.toString()
                     );
+
+                    String id = json.getString("id");
+                    String imageUrl = json.getString("url");
+
+                    File imageFile = new File(
+                            getFilesDir(), id + ".jpg"
+                    );
+
+                    if (imageFile.exists()) {
+
+                        // Load the saved picture
+                        currentCat = BitmapFactory.decodeFile(
+                                imageFile.getAbsolutePath()
+                        );
+
+                        Log.d("CatImages", "Loaded cached cat: " + id);
+
+                    } else {
+
+                        // Download a new picture
+                        URL downloadUrl = new URL(
+                                new URL("https://cataas.com/"),
+                                imageUrl
+                        );
+
+                        HttpURLConnection imageConnection =
+                                (HttpURLConnection)
+                                        downloadUrl.openConnection();
+
+                        imageConnection.setConnectTimeout(10000);
+                        imageConnection.setReadTimeout(10000);
+
+                        try {
+                            currentCat = BitmapFactory.decodeStream(
+                                    imageConnection.getInputStream()
+                            );
+                        } finally {
+                            imageConnection.disconnect();
+                        }
+
+                        if (currentCat != null) {
+                            try (FileOutputStream output =
+                                         new FileOutputStream(imageFile)) {
+
+                                currentCat.compress(
+                                        Bitmap.CompressFormat.JPEG,
+                                        90,
+                                        output
+                                );
+                            }
+
+                            Log.d("CatImages", "Downloaded cat: " + id);
+                        }
+                    }
+
+                    if (currentCat != null && !isCancelled()) {
+
+                        // Display the newly selected cat
+                        publishProgress(0);
+
+                        // Show each picture for about 3 seconds
+                        for (int i = 1; i <= 100 && !isCancelled(); i++) {
+                            Thread.sleep(30);
+                            publishProgress(i);
+                        }
+                    }
+
+                } catch (Exception e) {
+
+                    Log.e("CatImages", "Error loading cat", e);
+
+                    try {
+                        Thread.sleep(2000);
+                    } catch (InterruptedException interrupted) {
+                        return null;
+                    }
+
+                } finally {
+                    if (connection != null) {
+                        connection.disconnect();
+                    }
                 }
             }
-        });
 
-        // LONG CLICK DELETE
-        todoListView.setOnItemLongClickListener(
-                (parent, view, position, id) -> {
+            return null;
+        }
 
-                    AlertDialog.Builder builder =
-                            new AlertDialog.Builder(this);
+        @Override
+        protected void onProgressUpdate(Integer... values) {
+            super.onProgressUpdate(values);
 
-                    builder.setTitle(R.string.delete_title);
+            int progress = values[0];
 
-                    builder.setMessage(
-                            getString(
-                                    R.string.selected_row,
-                                    position
-                            )
-                    );
+            progressBar.setProgress(progress);
 
-                    builder.setPositiveButton(
-                            R.string.yes,
-                            (dialog, which) -> {
-
-                                TodoItem selectedTodo =
-                                        todoList.get(position);
-
-                                // Delete from SQLite
-                                int rowsDeleted = db.delete(
-                                        TodoDatabaseHelper.TABLE_NAME,
-                                        TodoDatabaseHelper.COL_ID + "=?",
-                                        new String[]{
-                                                String.valueOf(
-                                                        selectedTodo.getId()
-                                                )
-                                        }
-                                );
-
-                                if (rowsDeleted > 0) {
-
-                                    // Delete from ListView
-                                    todoList.remove(position);
-
-                                    adapter.notifyDataSetChanged();
-
-                                    Log.d(
-                                            "Database",
-                                            "Todo deleted"
-                                    );
-                                }
-                            });
-
-                    builder.setNegativeButton(
-                            R.string.no,
-                            null
-                    );
-
-                    builder.show();
-
-                    return true;
-                });
-    }
-
-    // LOAD TODOS FROM DATABASE
-    private void loadTodos() {
-
-        todoList.clear();
-
-        try (Cursor cursor = db.query(
-                TodoDatabaseHelper.TABLE_NAME,
-                null,
-                null,
-                null,
-                null,
-                null,
-                TodoDatabaseHelper.COL_ID + " ASC"
-        )) {
-
-            // Required Lab 5 debugging output
-            printCursor(cursor);
-
-            int idIndex =
-                    cursor.getColumnIndexOrThrow(
-                            TodoDatabaseHelper.COL_ID
-                    );
-
-            int textIndex =
-                    cursor.getColumnIndexOrThrow(
-                            TodoDatabaseHelper.COL_TODO
-                    );
-
-            int urgentIndex =
-                    cursor.getColumnIndexOrThrow(
-                            TodoDatabaseHelper.COL_URGENT
-                    );
-
-            while (cursor.moveToNext()) {
-
-                long id =
-                        cursor.getLong(idIndex);
-
-                String text =
-                        cursor.getString(textIndex);
-
-                boolean urgent =
-                        cursor.getInt(urgentIndex) == 1;
-
-                todoList.add(
-                        new TodoItem(
-                                id,
-                                text,
-                                urgent
-                        )
-                );
+            if (progress == 0 && currentCat != null) {
+                catImageView.setImageBitmap(currentCat);
             }
         }
-
-        adapter.notifyDataSetChanged();
-    }
-
-    // REQUIRED printCursor METHOD
-    private void printCursor(Cursor c) {
-
-        Log.d(
-                "Database",
-                "Database version: " + db.getVersion()
-        );
-
-        Log.d(
-                "Database",
-                "Number of columns: " + c.getColumnCount()
-        );
-
-        String[] columnNames = c.getColumnNames();
-
-        for (String columnName : columnNames) {
-
-            Log.d(
-                    "Database",
-                    "Column name: " + columnName
-            );
-        }
-
-        Log.d(
-                "Database",
-                "Number of results: " + c.getCount()
-        );
-
-        c.moveToPosition(-1);
-
-        while (c.moveToNext()) {
-
-            StringBuilder row =
-                    new StringBuilder();
-
-            for (int i = 0;
-                 i < c.getColumnCount();
-                 i++) {
-
-                row.append(columnNames[i])
-                        .append("=")
-                        .append(c.getString(i))
-                        .append(" ");
-            }
-
-            Log.d(
-                    "Database",
-                    "Row: " + row
-            );
-        }
-
-        // Reset cursor so loadTodos can read it
-        c.moveToPosition(-1);
     }
 }
