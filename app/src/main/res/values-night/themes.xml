@@ -1,7 +1,16 @@
+
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <!-- Base application theme. -->
-    <style name="Base.Theme.CST2335Lab2" parent="Theme.Material3.DayNight.NoActionBar">
-        <!-- Customize your dark theme here. -->
-        <!-- <item name="colorPrimary">@color/my_dark_primary</item> -->
+
+    <style name="Base.Theme.CST2335Lab2"
+        parent="Theme.AppCompat.DayNight.DarkActionBar">
+
+        <item name="colorPrimary">#6200EE</item>
+        <item name="colorPrimaryDark">#3700B3</item>
+        <item name="colorAccent">#BB86FC</item>
+
+        <item name="windowActionBar">true</item>
+        <item name="windowNoTitle">false</item>
+
     </style>
+
 </resources>

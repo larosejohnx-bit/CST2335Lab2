@@ -1,173 +1,194 @@
+
 package com.example.cst2335lab2;
 
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
+import android.content.Intent;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.util.Log;
-import android.widget.ImageView;
-import android.widget.ProgressBar;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.BaseAdapter;
+import android.widget.ListView;
+import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
 
+import org.json.JSONArray;
 import org.json.JSONObject;
 
-import java.io.File;
-import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.ArrayList;
+import java.util.Scanner;
 
 public class MainActivity extends AppCompatActivity {
 
-    private ImageView catImageView;
-    private ProgressBar progressBar;
-    private CatImages catTask;
+    private ListView characterListView;
+    private ArrayList<JSONObject> characters = new ArrayList<>();
+    private CharacterAdapter adapter;
+    private LoadCharacters loadTask;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
         setContentView(R.layout.activity_main);
 
-        catImageView = findViewById(R.id.catImageView);
-        progressBar = findViewById(R.id.progressBar);
+        // Fix Android 16 status bar and ActionBar overlap
+        View root = findViewById(R.id.characterListView);
 
-        progressBar.setMax(100);
-        progressBar.setProgress(0);
+        ViewCompat.setOnApplyWindowInsetsListener(
+                root, (v, insets) -> {
 
-        catTask = new CatImages();
-        catTask.execute();
+                    Insets systemBars = insets.getInsets(
+                            WindowInsetsCompat.Type.systemBars()
+                    );
+
+                    v.setPadding(
+                            v.getPaddingLeft(),
+                            systemBars.top,
+                            v.getPaddingRight(),
+                            systemBars.bottom
+                    );
+
+                    // Apply the same insets to tablet details
+                    View detailsFrame = findViewById(R.id.detailsFrame);
+
+                    if (detailsFrame != null) {
+                        detailsFrame.setPadding(
+                                0,
+                                systemBars.top,
+                                0,
+                                systemBars.bottom
+                        );
+                    }
+
+                    return insets;
+                });
+
+        // Set up character ListView
+        characterListView =
+                findViewById(R.id.characterListView);
+
+        adapter = new CharacterAdapter();
+        characterListView.setAdapter(adapter);
+
+        // Handle character selection
+        characterListView.setOnItemClickListener(
+                (parent, view, position, id) -> {
+
+                    JSONObject character = characters.get(position);
+
+                    // Store selected character information
+                    Bundle bundle = new Bundle();
+
+                    bundle.putString(
+                            "name",
+                            character.optString("name", "")
+                    );
+
+                    bundle.putString(
+                            "height",
+                            character.optString("height", "")
+                    );
+
+                    bundle.putString(
+                            "mass",
+                            character.optString("mass", "")
+                    );
+
+                    if (findViewById(R.id.detailsFrame) == null) {
+
+                        // Phone: open a separate activity
+                        Intent intent = new Intent(
+                                MainActivity.this,
+                                EmptyActivity.class
+                        );
+
+                        intent.putExtras(bundle);
+                        startActivity(intent);
+
+                    } else {
+
+                        // Tablet: display details beside ListView
+                        DetailsFragment fragment =
+                                new DetailsFragment();
+
+                        fragment.setArguments(bundle);
+
+                        getSupportFragmentManager()
+                                .beginTransaction()
+                                .replace(R.id.detailsFrame, fragment)
+                                .commit();
+                    }
+                });
+
+        // Download Star Wars characters
+        loadTask = new LoadCharacters();
+        loadTask.execute();
     }
 
     @Override
     protected void onDestroy() {
-        if (catTask != null) {
-            catTask.cancel(true);
+
+        if (loadTask != null) {
+            loadTask.cancel(true);
         }
+
         super.onDestroy();
     }
 
-    // Downloads cat pictures and updates the slideshow
-    private class CatImages extends AsyncTask<String, Integer, String> {
-
-        private Bitmap currentCat;
+    // AsyncTask for downloading Star Wars information
+    private class LoadCharacters
+            extends AsyncTask<Void, Void, String> {
 
         @Override
-        protected String doInBackground(String... strings) {
+        protected String doInBackground(Void... voids) {
 
-            while (!isCancelled()) {
-                HttpURLConnection connection = null;
+            HttpURLConnection connection = null;
 
-                try {
-                    // Request random cat information
-                    URL apiUrl = new URL(
-                            "https://cataas.com/cat?json=true"
-                    );
+            try {
 
-                    connection = (HttpURLConnection)
-                            apiUrl.openConnection();
+                URL url = new URL(
+                        "https://swapi.dev/api/people/?format=json"
+                );
 
-                    connection.setConnectTimeout(10000);
-                    connection.setReadTimeout(10000);
-                    connection.setUseCaches(false);
+                connection =
+                        (HttpURLConnection) url.openConnection();
 
-                    StringBuilder response = new StringBuilder();
+                connection.setConnectTimeout(10000);
+                connection.setReadTimeout(10000);
 
-                    try (InputStream input = connection.getInputStream();
-                         java.util.Scanner scanner =
-                                 new java.util.Scanner(input, "UTF-8")) {
+                try (InputStream input =
+                             connection.getInputStream();
 
-                        scanner.useDelimiter("\\A");
+                     Scanner scanner =
+                             new Scanner(input, "UTF-8")) {
 
-                        if (scanner.hasNext()) {
-                            response.append(scanner.next());
-                        }
+                    scanner.useDelimiter("\\A");
+
+                    if (scanner.hasNext()) {
+                        return scanner.next();
                     }
+                }
 
-                    JSONObject json = new JSONObject(
-                            response.toString()
-                    );
+            } catch (Exception e) {
 
-                    String id = json.getString("id");
-                    String imageUrl = json.getString("url");
+                Log.e(
+                        "StarWarsAPI",
+                        "Error loading characters",
+                        e
+                );
 
-                    File imageFile = new File(
-                            getFilesDir(), id + ".jpg"
-                    );
+            } finally {
 
-                    if (imageFile.exists()) {
-
-                        // Load the saved picture
-                        currentCat = BitmapFactory.decodeFile(
-                                imageFile.getAbsolutePath()
-                        );
-
-                        Log.d("CatImages", "Loaded cached cat: " + id);
-
-                    } else {
-
-                        // Download a new picture
-                        URL downloadUrl = new URL(
-                                new URL("https://cataas.com/"),
-                                imageUrl
-                        );
-
-                        HttpURLConnection imageConnection =
-                                (HttpURLConnection)
-                                        downloadUrl.openConnection();
-
-                        imageConnection.setConnectTimeout(10000);
-                        imageConnection.setReadTimeout(10000);
-
-                        try {
-                            currentCat = BitmapFactory.decodeStream(
-                                    imageConnection.getInputStream()
-                            );
-                        } finally {
-                            imageConnection.disconnect();
-                        }
-
-                        if (currentCat != null) {
-                            try (FileOutputStream output =
-                                         new FileOutputStream(imageFile)) {
-
-                                currentCat.compress(
-                                        Bitmap.CompressFormat.JPEG,
-                                        90,
-                                        output
-                                );
-                            }
-
-                            Log.d("CatImages", "Downloaded cat: " + id);
-                        }
-                    }
-
-                    if (currentCat != null && !isCancelled()) {
-
-                        // Display the newly selected cat
-                        publishProgress(0);
-
-                        // Show each picture for about 3 seconds
-                        for (int i = 1; i <= 100 && !isCancelled(); i++) {
-                            Thread.sleep(30);
-                            publishProgress(i);
-                        }
-                    }
-
-                } catch (Exception e) {
-
-                    Log.e("CatImages", "Error loading cat", e);
-
-                    try {
-                        Thread.sleep(2000);
-                    } catch (InterruptedException interrupted) {
-                        return null;
-                    }
-
-                } finally {
-                    if (connection != null) {
-                        connection.disconnect();
-                    }
+                if (connection != null) {
+                    connection.disconnect();
                 }
             }
 
@@ -175,16 +196,98 @@ public class MainActivity extends AppCompatActivity {
         }
 
         @Override
-        protected void onProgressUpdate(Integer... values) {
-            super.onProgressUpdate(values);
+        protected void onPostExecute(String response) {
 
-            int progress = values[0];
+            if (response == null) {
 
-            progressBar.setProgress(progress);
+                Toast.makeText(
+                        MainActivity.this,
+                        "Failed to load characters",
+                        Toast.LENGTH_LONG
+                ).show();
 
-            if (progress == 0 && currentCat != null) {
-                catImageView.setImageBitmap(currentCat);
+                return;
             }
+
+            try {
+
+                JSONObject json = new JSONObject(response);
+
+                JSONArray results =
+                        json.getJSONArray("results");
+
+                characters.clear();
+
+                for (int i = 0; i < results.length(); i++) {
+
+                    characters.add(
+                            results.getJSONObject(i)
+                    );
+                }
+
+                // Update ListView after downloading data
+                adapter.notifyDataSetChanged();
+
+            } catch (Exception e) {
+
+                Log.e(
+                        "StarWarsAPI",
+                        "Error reading JSON",
+                        e
+                );
+            }
+        }
+    }
+
+    // Custom adapter for Star Wars character names
+    private class CharacterAdapter extends BaseAdapter {
+
+        @Override
+        public int getCount() {
+            return characters.size();
+        }
+
+        @Override
+        public Object getItem(int position) {
+            return characters.get(position);
+        }
+
+        @Override
+        public long getItemId(int position) {
+            return position;
+        }
+
+        @Override
+        public View getView(
+                int position,
+                View convertView,
+                ViewGroup parent) {
+
+            TextView textView;
+
+            if (convertView == null) {
+
+                textView = new TextView(MainActivity.this);
+
+                textView.setTextSize(20);
+
+                textView.setPadding(
+                        12, 12, 12, 12
+                );
+
+            } else {
+
+                textView = (TextView) convertView;
+            }
+
+            JSONObject character =
+                    characters.get(position);
+
+            textView.setText(
+                    character.optString("name", "Unknown")
+            );
+
+            return textView;
         }
     }
 }
