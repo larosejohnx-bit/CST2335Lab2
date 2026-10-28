@@ -32,6 +32,11 @@ android {
 }
 
 dependencies {
+    //added lab_8 implementations
+    implementation("com.google.android.material:material:1.12.0")
+    implementation("androidx.appcompat:appcompat:1.7.0")
+    implementation("androidx.drawerlayout:drawerlayout:1.2.0")
+    //end of added implementations
     implementation(libs.activity.ktx)
     implementation(libs.appcompat)
     implementation(libs.constraintlayout)
